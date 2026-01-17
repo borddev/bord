@@ -66,7 +66,7 @@ The prompt contains:
 ### Option 1: Install with Claude Code (Recommended)
 
 1. Install [Claude Code CLI](https://docs.anthropic.com/claude-code)
-2. Find an app you want (e.g., [x-reply-guy](https://github.com/Cronin/x-reply-guy))
+2. Find an app you want (e.g., [x-reply-guy](https://github.com/borddev/x-reply-guy))
 3. Open its `PROMPT.md`
 4. Copy everything and paste into Claude Code
 5. Done
@@ -74,7 +74,7 @@ The prompt contains:
 ### Option 2: Manual Install
 
 ```bash
-git clone https://github.com/Cronin/bord
+git clone https://github.com/borddev/bord
 cd bord
 npm install
 cp .env.example .env.local
@@ -128,7 +128,7 @@ When you paste a PROMPT.md, Claude Code reads these files automatically and know
 ### Via CLI
 ```bash
 # Clone app into the apps folder
-git clone https://github.com/Cronin/x-reply-guy ./apps/x-reply-guy
+git clone https://github.com/borddev/x-reply-guy ./apps/x-reply-guy
 
 # The app's pages are already set up to work with BORD's routing
 ```
@@ -164,7 +164,7 @@ your-app/
 
 | App | Description | Install |
 |-----|-------------|---------|
-| [x-reply-guy](https://github.com/Cronin/x-reply-guy) | AI-powered Twitter/X reply bot | [PROMPT.md](https://github.com/Cronin/x-reply-guy/blob/main/PROMPT.md) |
+| [x-reply-guy](https://github.com/borddev/x-reply-guy) | AI-powered Twitter/X reply bot | [PROMPT.md](https://github.com/borddev/x-reply-guy/blob/main/PROMPT.md) |
 
 ## Tech Stack
 
@@ -199,4 +199,4 @@ MIT
 
 ---
 
-**[bord.dev](https://bord.dev)** · **[GitHub](https://github.com/Cronin/bord)** · **[X Reply Guy](https://github.com/Cronin/x-reply-guy)**
+**[bord.dev](https://bord.dev)** · **[GitHub](https://github.com/borddev/bord)** · **[X Reply Guy](https://github.com/borddev/x-reply-guy)**
