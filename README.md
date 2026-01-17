@@ -31,6 +31,10 @@ Run: node -v
 - If v18+: Continue
 - If not installed: Tell user to install from https://nodejs.org
 
+STEP 2.5: INSTALL NOTIFICATIONS
+Run: brew install terminal-notifier
+Tell user: "A popup will ask to allow notifications - click Allow. This lets BORD notify you when tasks complete."
+
 STEP 3: INSTALL BORD
 Check if ~/bord exists: ls ~/bord 2>/dev/null
 - If exists: Ask "Use existing ~/bord? (yes/no)"
