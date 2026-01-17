@@ -1,25 +1,18 @@
 # BORD
 
-**Build Once, Run Daily** — A monorepo for AI-powered automations.
+**Build Once, Run Daily** — Monorepo for AI automations.
 
 ## Install
 
-**1. Start Claude Code:**
-```bash
-claude --dangerously-skip-permissions
+1. Run `claude --dangerously-skip-permissions`
+2. Copy the prompt below and paste:
+
 ```
+You are installing BORD, a monorepo for AI-powered automations.
 
-**2. Copy everything below and paste:**
-
----
-
-You are installing **BORD**, a monorepo for AI-powered automations.
-
-## Step 1: Show Welcome
-
+STEP 1: SHOW WELCOME
 Print this exactly:
 
-```
 ┌──────────────────────────────────────────────────────────────┐
 │                                                              │
 │    ██████╗  ██████╗ ██████╗ ██████╗                          │
@@ -32,53 +25,27 @@ Print this exactly:
 │    Build Once, Run Daily                                     │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
-```
 
-## Step 2: Check Node.js
+STEP 2: CHECK NODE.JS
+Run: node -v
+- If v18+: Continue
+- If not installed: Tell user to install from https://nodejs.org
 
-Run `node -v` to check if Node.js is installed.
-- If installed (v18+): ✓ Node.js ready
-- If not installed: Tell user to install from https://nodejs.org and come back
+STEP 3: INSTALL BORD
+Check if ~/bord exists: ls ~/bord 2>/dev/null
+- If exists: Ask "Use existing ~/bord? (yes/no)"
+- If not: Run: git clone https://github.com/borddev/bord ~/bord
+Print: [██████████░░░░░░░░░░] 50% - BORD cloned
 
-## Step 3: Install BORD
+STEP 4: INSTALL DEPENDENCIES
+Run: cd ~/bord && npm install
+Print: [████████████████████] 100% - Dependencies installed
 
-Check if ~/bord already exists:
-```bash
-ls ~/bord 2>/dev/null
-```
+STEP 5: CREATE ENV FILE
+Run: cp ~/bord/.env.example ~/bord/.env.local
 
-If it exists, ask: "BORD is already installed at ~/bord. Use existing installation? (yes/no)"
-- If yes: Skip to Step 5
-- If no: Ask if they want to delete and reinstall
-
-If it doesn't exist, clone:
-```bash
-git clone https://github.com/borddev/bord ~/bord
-```
-
-Print: `[██████████░░░░░░░░░░] 50% - BORD cloned`
-
-## Step 4: Install Dependencies
-
-```bash
-cd ~/bord && npm install
-```
-
-Print: `[████████████████████] 100% - Dependencies installed`
-
-## Step 5: Create Environment File
-
-Check if ~/bord/.env.local exists. If not, create it:
-
-```bash
-cp ~/bord/.env.example ~/bord/.env.local
-```
-
-## Step 6: Complete
-
-Print this:
-
-```
+STEP 6: COMPLETE
+Print:
 ════════════════════════════════════════════════════════════════
  ✓ BORD INSTALLED
 ════════════════════════════════════════════════════════════════
@@ -86,47 +53,18 @@ Print this:
  Location: ~/bord
 
  NEXT STEPS:
- ───────────
- 1. A new terminal window will open at ~/bord
+ 1. A new terminal will open at ~/bord
  2. Run: claude --dangerously-skip-permissions
- 3. Say "start the dev server" to launch BORD
+ 3. Say "start the dev server"
 
  INSTALL AN APP:
- ───────────────
- Go to an app repo and copy its install prompt:
  • x-reply-guy: https://github.com/borddev/x-reply-guy
 
 ════════════════════════════════════════════════════════════════
 
-Opening new terminal...
-```
-
-## Step 7: Open New Terminal
-
-Run this to open a new terminal window in ~/bord:
-
-```bash
-osascript -e 'tell application "Terminal" to do script "cd ~/bord && echo \"Welcome to BORD!\" && echo \"\" && echo \"Run: claude --dangerously-skip-permissions\" && echo \"\""'
-```
-
-Tell the user: "A new Terminal window opened. Run `claude --dangerously-skip-permissions` there to continue."
-
----
-
-## What is BORD?
-
-BORD is a monorepo that hosts automation apps. Each app is a separate repo that installs into BORD.
-
-```
-~/bord/
-├── app/           # Dashboard pages
-│   ├── home/      # App grid
-│   ├── secrets/   # API key manager
-│   ├── claude-md/ # Edit CLAUDE.md files
-│   └── chats/     # Claude Code history
-├── apps/          # Installed apps go here
-│   └── x-reply-guy/
-└── .env.local     # All your secrets
+STEP 7: OPEN NEW TERMINAL
+Run: osascript -e 'tell application "Terminal" to do script "cd ~/bord && echo Welcome to BORD! && echo && echo Run: claude --dangerously-skip-permissions"'
+Tell user: "New terminal opened. Run claude --dangerously-skip-permissions there."
 ```
 
 ## Apps
@@ -138,4 +76,4 @@ BORD is a monorepo that hosts automation apps. Each app is a separate repo that 
 ## Links
 
 - [bord.dev](https://bord.dev)
-- [Report Issues](https://github.com/borddev/bord/issues)
+- [Issues](https://github.com/borddev/bord/issues)
