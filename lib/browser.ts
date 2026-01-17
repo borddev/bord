@@ -185,6 +185,13 @@ if (require.main === module) {
       const page = await getPage(context);
       await page.goto('https://x.com');
       console.log('Browser launched! Close the window when done.');
+
+      // Keep process running until browser is closed
+      await new Promise<void>((resolve) => {
+        context.on('close', () => resolve());
+      });
+      console.log('Browser closed.');
+      process.exit(0);
     });
   } else if (command === 'list') {
     console.log('Browser profiles:');
