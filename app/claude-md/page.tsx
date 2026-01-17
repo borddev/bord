@@ -1,222 +1,121 @@
 'use client';
 
-import Link from 'next/link';
 import { useState, useEffect } from 'react';
-
-interface ClaudeMdFile {
-  id: string;
-  name: string;
-  path: string;
-  content: string;
-  type: 'core' | 'app';
-}
+import { FileText, Save, RotateCcw } from 'lucide-react';
 
 export default function ClaudeMdPage() {
-  const [files, setFiles] = useState<ClaudeMdFile[]>([]);
-  const [selected, setSelected] = useState<ClaudeMdFile | null>(null);
   const [content, setContent] = useState('');
+  const [originalContent, setOriginalContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadFiles();
+    fetch('/api/claude-md')
+      .then(res => res.json())
+      .then(data => {
+        setContent(data.content || '');
+        setOriginalContent(data.content || '');
+      })
+      .finally(() => setLoading(false));
   }, []);
 
-  async function loadFiles() {
-    try {
-      const res = await fetch('/api/claude-md');
-      const data = await res.json();
-      setFiles(data.files || []);
-      if (data.files?.length > 0) {
-        selectFile(data.files[0]);
-      }
-    } catch {
-      setFiles([]);
-    }
-  }
-
-  function selectFile(file: ClaudeMdFile) {
-    setSelected(file);
-    setContent(file.content);
-    setSaved(false);
-  }
-
-  async function saveFile() {
-    if (!selected) return;
+  const handleSave = async () => {
     setSaving(true);
     try {
       await fetch('/api/claude-md', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: selected.path, content })
+        body: JSON.stringify({ content }),
       });
+      setOriginalContent(content);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch (e) {
-      console.error('Failed to save:', e);
+    } catch (err) {
+      alert('Error saving');
     }
     setSaving(false);
+  };
+
+  const handleReset = () => {
+    setContent(originalContent);
+  };
+
+  const hasChanges = content !== originalContent;
+
+  if (loading) {
+    return (
+      <div className="p-8">
+        <p className="text-gray-500">Loading...</p>
+      </div>
+    );
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: '#000',
-      display: 'flex',
-      flexDirection: 'column'
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '16px 24px',
-        borderBottom: '1px solid #222',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <Link
-            href="/home"
-            style={{
-              color: '#666',
-              textDecoration: 'none',
-              fontSize: 13,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M19 12H5M12 19l-7-7 7-7"/>
-            </svg>
-            Home
-          </Link>
-          <h1 style={{ fontSize: 16, fontWeight: 500 }}>CLAUDE.md</h1>
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <FileText className="w-8 h-8 text-gray-700" />
+          <div>
+            <h1 className="text-2xl font-bold">CLAUDE.md</h1>
+            <p className="text-gray-500 text-sm">Workspace context for Claude Code</p>
+          </div>
         </div>
-        <button
-          onClick={saveFile}
-          disabled={saving || !selected}
-          style={{
-            background: saved ? '#22c55e' : '#fff',
-            color: saved ? '#fff' : '#000',
-            border: 'none',
-            padding: '8px 20px',
-            borderRadius: 6,
-            fontSize: 13,
-            fontWeight: 500,
-            cursor: saving ? 'wait' : 'pointer',
-            opacity: !selected ? 0.5 : 1
-          }}
-        >
-          {saving ? 'Saving...' : saved ? 'Saved!' : 'Save'}
-        </button>
+        <div className="flex gap-2">
+          {hasChanges && (
+            <button
+              onClick={handleReset}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Reset
+            </button>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving || !hasChanges}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-white ${
+              saved
+                ? 'bg-green-600'
+                : hasChanges
+                ? 'bg-blue-600 hover:bg-blue-700'
+                : 'bg-gray-400 cursor-not-allowed'
+            }`}
+          >
+            <Save className="w-4 h-4" />
+            {saving ? 'Saving...' : saved ? 'Saved!' : 'Save'}
+          </button>
+        </div>
       </div>
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Sidebar */}
-        <div style={{
-          width: 240,
-          borderRight: '1px solid #222',
-          padding: 16,
-          overflowY: 'auto'
-        }}>
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ color: '#666', fontSize: 10, fontWeight: 500, marginBottom: 8, textTransform: 'uppercase' }}>
-              Core
-            </div>
-            {files.filter(f => f.type === 'core').map(file => (
-              <button
-                key={file.id}
-                onClick={() => selectFile(file)}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  textAlign: 'left',
-                  background: selected?.id === file.id ? '#222' : 'transparent',
-                  border: 'none',
-                  padding: '10px 12px',
-                  borderRadius: 6,
-                  color: selected?.id === file.id ? '#fff' : '#888',
-                  cursor: 'pointer',
-                  fontSize: 13,
-                  marginBottom: 4
-                }}
-              >
-                {file.name}
-              </button>
-            ))}
+      <div className="grid grid-cols-2 gap-4 h-[calc(100vh-180px)]">
+        {/* Editor */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col">
+          <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center gap-2 shrink-0">
+            <span className="text-xs font-mono text-gray-500">Editor</span>
+            {hasChanges && <span className="text-xs text-orange-500 font-medium">modified</span>}
           </div>
-
-          {files.filter(f => f.type === 'app').length > 0 && (
-            <div>
-              <div style={{ color: '#666', fontSize: 10, fontWeight: 500, marginBottom: 8, textTransform: 'uppercase' }}>
-                Apps
-              </div>
-              {files.filter(f => f.type === 'app').map(file => (
-                <button
-                  key={file.id}
-                  onClick={() => selectFile(file)}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    textAlign: 'left',
-                    background: selected?.id === file.id ? '#222' : 'transparent',
-                    border: 'none',
-                    padding: '10px 12px',
-                    borderRadius: 6,
-                    color: selected?.id === file.id ? '#fff' : '#888',
-                    cursor: 'pointer',
-                    fontSize: 13,
-                    marginBottom: 4
-                  }}
-                >
-                  {file.name}
-                </button>
-              ))}
-            </div>
-          )}
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="flex-1 p-4 font-mono text-sm resize-none focus:outline-none"
+            placeholder="# BORD Workspace..."
+            spellCheck={false}
+          />
         </div>
 
-        {/* Editor */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          {selected ? (
-            <>
-              <div style={{
-                padding: '12px 20px',
-                borderBottom: '1px solid #222',
-                fontSize: 12,
-                color: '#666'
-              }}>
-                {selected.path}
-              </div>
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                style={{
-                  flex: 1,
-                  background: '#0a0a0a',
-                  color: '#e0e0e0',
-                  border: 'none',
-                  padding: 20,
-                  fontSize: 13,
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
-                  lineHeight: 1.6,
-                  resize: 'none',
-                  outline: 'none'
-                }}
-                spellCheck={false}
-              />
-            </>
-          ) : (
-            <div style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#444'
-            }}>
-              Select a file to edit
+        {/* Preview */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col">
+          <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 shrink-0">
+            <span className="text-xs font-mono text-gray-500">Preview</span>
+          </div>
+          <div className="flex-1 p-6 overflow-auto">
+            <div className="prose prose-sm max-w-none">
+              <pre className="whitespace-pre-wrap text-sm text-gray-700 font-mono bg-transparent p-0 m-0">
+                {content || 'No content yet...'}
+              </pre>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

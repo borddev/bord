@@ -41,3 +41,7 @@ Thumbs.db
 apps/*/state.json
 apps/*/*.db
 apps/*/logs/
+data/
+
+# Claude Code
+.claude/

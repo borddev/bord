@@ -12,7 +12,7 @@ export async function GET() {
       description: string;
       href: string;
       color: string;
-      icon: null; // Icons are rendered client-side
+      icon: string | null;
       installed: boolean;
     }> = [];
 
@@ -33,7 +33,7 @@ export async function GET() {
             description: config.description || '',
             href: config.href || `/${appId}`,
             color: config.color || '#666',
-            icon: null,
+            icon: config.icon || null,
             installed: true
           });
         } catch {

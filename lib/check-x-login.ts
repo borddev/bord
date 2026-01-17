@@ -2,13 +2,12 @@
 
 /**
  * Check if user is logged into X and report status via API
- * Polls until logged in, then completes setup
+ * Monitors the profile directory for auth cookie changes
  */
 
-import { chromium } from 'playwright';
 import { join } from 'path';
 import { homedir } from 'os';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync, statSync } from 'fs';
 
 const PROFILES_DIR = join(homedir(), 'bord', 'data', 'browser-profiles');
 const API_URL = 'http://localhost:3000/api/setup';
@@ -34,6 +33,44 @@ async function updateStatus(data: any) {
   } catch {}
 }
 
+function checkCookiesFile(profileName: string): boolean {
+  const profilePath = join(PROFILES_DIR, profileName);
+  const cookiesPath = join(profilePath, 'Default', 'Cookies');
+  const cookiesPathAlt = join(profilePath, 'Cookies');
+
+  // Check for cookie file existence and size
+  for (const path of [cookiesPath, cookiesPathAlt]) {
+    if (existsSync(path)) {
+      try {
+        const stats = statSync(path);
+        // If cookies file is larger than 10KB, user likely logged in
+        if (stats.size > 10000) {
+          return true;
+        }
+      } catch {}
+    }
+  }
+
+  // Also check for Local State file which gets updated on login
+  const localStatePath = join(profilePath, 'Local State');
+  if (existsSync(localStatePath)) {
+    try {
+      const content = readFileSync(localStatePath, 'utf-8');
+      // Check if there's encryption_mode set (indicates active session)
+      if (content.includes('"os_crypt"') && content.includes('"encrypted_key"')) {
+        const stats = statSync(localStatePath);
+        // File should be recent (within last 5 minutes) to indicate active login
+        const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+        if (stats.mtimeMs > fiveMinutesAgo) {
+          return true;
+        }
+      }
+    } catch {}
+  }
+
+  return false;
+}
+
 async function checkLogin(profileName: string): Promise<boolean> {
   const profilePath = join(PROFILES_DIR, profileName);
 
@@ -41,29 +78,8 @@ async function checkLogin(profileName: string): Promise<boolean> {
     return false;
   }
 
-  let context;
-  try {
-    // Launch headless to check cookies
-    context = await chromium.launchPersistentContext(profilePath, {
-      headless: true,
-      args: ['--disable-blink-features=AutomationControlled']
-    });
-
-    const page = await context.newPage();
-    await page.goto('https://x.com/home', { waitUntil: 'domcontentloaded', timeout: 15000 });
-
-    // Wait a bit for redirects
-    await page.waitForTimeout(2000);
-
-    const url = page.url();
-    const isLoggedIn = !url.includes('login') && !url.includes('i/flow') && url.includes('x.com');
-
-    await context.close();
-    return isLoggedIn;
-  } catch (e) {
-    if (context) await context.close().catch(() => {});
-    return false;
-  }
+  // Check cookie file for auth data
+  return checkCookiesFile(profileName);
 }
 
 async function main() {

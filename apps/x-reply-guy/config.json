@@ -1,0 +1,9 @@
+{
+  "id": "x-reply-guy",
+  "name": "X Reply Guy",
+  "description": "Twitter/X analytics & automation",
+  "href": "/x-reply-guy",
+  "color": "#1d9bf0",
+  "icon": "/icons/x-reply.webp",
+  "repo": "https://github.com/borddev/x-reply-guy"
+}
