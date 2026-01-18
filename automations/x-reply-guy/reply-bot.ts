@@ -56,27 +56,38 @@ async function postReply(page: Page, tweetUrl: string, reply: string) {
   console.log(`Reply: "${reply}"`);
 
   await page.goto(tweetUrl, { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(3000);
 
-  // Click reply button
-  const replyButton = await page.$("div[data-testid=\"reply\"]");
-  if (replyButton) {
-    await replyButton.click();
+  // Take screenshot before
+  await page.screenshot({ path: "/tmp/before-reply.png" });
+
+  // Find and click the reply input area at the bottom of the tweet
+  try {
+    // Click on the reply text area
+    const replyArea = await page.waitForSelector("div[data-testid=\"tweetTextarea_0\"]", { timeout: 5000 });
+    await replyArea.click();
+    await page.waitForTimeout(500);
+
+    // Type the reply
+    await page.keyboard.type(reply, { delay: 50 });
     await page.waitForTimeout(1000);
 
-    // Type reply
-    const replyBox = await page.$("div[data-testid=\"tweetTextarea_0\"]");
-    if (replyBox) {
-      await replyBox.fill(reply);
-      await page.waitForTimeout(500);
+    // Take screenshot after typing
+    await page.screenshot({ path: "/tmp/typed-reply.png" });
 
-      // POST THE REPLY
-      await page.click("button[data-testid=\"tweetButton\"]");
-      console.log("  Posted!");
-      return true;
-    }
+    // Click the Reply/Post button
+    const postButton = await page.waitForSelector("button[data-testid=\"tweetButtonInline\"]", { timeout: 5000 });
+    await postButton.click();
+
+    console.log("  Posted!");
+    await page.waitForTimeout(2000);
+    await page.screenshot({ path: "/tmp/after-reply.png" });
+    return true;
+  } catch (err: any) {
+    console.log("  Error:", err.message);
+    await page.screenshot({ path: "/tmp/reply-error.png" });
+    return false;
   }
-  return false;
 }
 
 async function main() {
