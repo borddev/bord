@@ -8,8 +8,8 @@
  * 2. Playwright (fallback) - Simple stealth, no extra software needed
  *
  * Usage:
- *   # AdsPower mode (default if ADSPOWER_PROFILE_ID is set)
- *   ADSPOWER_PROFILE_ID=k18yuu5q npx tsx lib/browser.ts launch
+ *   # AdsPower mode (requires API key from AdsPower settings)
+ *   ADSPOWER_API_KEY=xxx ADSPOWER_PROFILE_ID=k18yuu5q npx tsx lib/browser.ts launch
  *
  *   # Playwright mode (fallback)
  *   npx tsx lib/browser.ts launch my-profile
@@ -23,6 +23,21 @@ import { existsSync, mkdirSync, readdirSync, statSync, rmSync } from 'fs';
 const BORD_DIR = process.cwd();
 const PROFILES_DIR = join(BORD_DIR, 'data', 'browser-profiles');
 const ADSPOWER_API = process.env.ADSPOWER_API || 'http://127.0.0.1:50325';
+const ADSPOWER_API_KEY = process.env.ADSPOWER_API_KEY || '';
+
+/**
+ * Build AdsPower API URL with optional API key
+ */
+function buildAdsPowerUrl(path: string, params: Record<string, string> = {}): string {
+  const url = new URL(path, ADSPOWER_API);
+  if (ADSPOWER_API_KEY) {
+    url.searchParams.set('api_key', ADSPOWER_API_KEY);
+  }
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, value);
+  }
+  return url.toString();
+}
 
 // Ensure profiles directory exists
 if (!existsSync(PROFILES_DIR)) {
@@ -43,7 +58,7 @@ export async function connectAdsPower(profileId: string): Promise<{ browser: Bro
   console.log(`Connecting to AdsPower profile: ${profileId}`);
 
   // Open the profile via AdsPower API
-  const openUrl = `${ADSPOWER_API}/api/v1/browser/start?user_id=${profileId}`;
+  const openUrl = buildAdsPowerUrl('/api/v1/browser/start', { user_id: profileId });
   const response = await fetch(openUrl);
   const data = await response.json();
 
@@ -66,7 +81,7 @@ export async function connectAdsPower(profileId: string): Promise<{ browser: Bro
  * Close AdsPower browser profile
  */
 export async function closeAdsPower(profileId: string): Promise<void> {
-  const closeUrl = `${ADSPOWER_API}/api/v1/browser/stop?user_id=${profileId}`;
+  const closeUrl = buildAdsPowerUrl('/api/v1/browser/stop', { user_id: profileId });
   await fetch(closeUrl);
 }
 
@@ -87,7 +102,8 @@ export async function isAdsPowerRunning(): Promise<boolean> {
  */
 export async function listAdsPowerProfiles(): Promise<any[]> {
   try {
-    const response = await fetch(`${ADSPOWER_API}/api/v1/user/list?page_size=100`);
+    const url = buildAdsPowerUrl('/api/v1/user/list', { page_size: '100' });
+    const response = await fetch(url);
     const data = await response.json();
     if (data.code === 0) {
       return data.data.list || [];
@@ -311,6 +327,7 @@ Usage:
 
 Environment:
   ADSPOWER_API=http://127.0.0.1:50325         AdsPower API endpoint
+  ADSPOWER_API_KEY=xxx                        AdsPower API key (from AdsPower settings)
   ADSPOWER_PROFILE_ID=xxx                     Default AdsPower profile ID
 
 If AdsPower is running, it will be used automatically.
