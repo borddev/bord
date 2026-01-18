@@ -3,12 +3,16 @@
 /**
  * BORD Browser - Browser automation with AdsPower or Playwright
  *
- * Supports two modes:
- * 1. AdsPower (recommended) - Best anti-detection, requires AdsPower installed
- * 2. Playwright (fallback) - Simple stealth, no extra software needed
+ * Supports three modes:
+ * 1. AdsPower (connect to running) - Open browser in AdsPower GUI, BORD connects to it
+ * 2. AdsPower API - Requires premium, launches browser via API
+ * 3. Playwright (fallback) - Simple stealth, no extra software needed
  *
  * Usage:
- *   # AdsPower mode (requires API key from AdsPower settings)
+ *   # Connect to already-running AdsPower browser (FREE - recommended)
+ *   npx tsx lib/browser.ts connect
+ *
+ *   # AdsPower API mode (requires premium)
  *   ADSPOWER_API_KEY=xxx ADSPOWER_PROFILE_ID=k18yuu5q npx tsx lib/browser.ts launch
  *
  *   # Playwright mode (fallback)
@@ -19,6 +23,7 @@ import { chromium, Browser, Page, BrowserContext } from 'playwright';
 import { join } from 'path';
 import { homedir } from 'os';
 import { existsSync, mkdirSync, readdirSync, statSync, rmSync } from 'fs';
+import { execSync } from 'child_process';
 
 const BORD_DIR = process.cwd();
 const PROFILES_DIR = join(BORD_DIR, 'data', 'browser-profiles');
@@ -94,6 +99,64 @@ export async function isAdsPowerRunning(): Promise<boolean> {
     return response.ok;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Find running AdsPower/SunBrowser debug ports (no API needed)
+ * This works with free AdsPower - just open your browser in AdsPower GUI first
+ */
+export function findAdsPowerDebugPorts(): number[] {
+  try {
+    // Use lsof to find SunBrowser listening ports
+    const output = execSync('lsof -i -P -n 2>/dev/null | grep SunBrow | grep LISTEN || true', {
+      encoding: 'utf-8',
+    });
+
+    const ports: number[] = [];
+    const lines = output.trim().split('\n').filter(Boolean);
+
+    for (const line of lines) {
+      // Match port number from lines like: "SunBrowse 17930 claudio   63u  IPv4 ... TCP 127.0.0.1:54689 (LISTEN)"
+      const match = line.match(/:(\d+)\s+\(LISTEN\)/);
+      if (match) {
+        ports.push(parseInt(match[1], 10));
+      }
+    }
+
+    return ports;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Connect to an already-running AdsPower browser via debug port
+ * No API key needed - just open the browser in AdsPower GUI first
+ */
+export async function connectToRunningAdsPower(port?: number): Promise<{ browser: Browser; context: BrowserContext }> {
+  // Find available ports if not specified
+  const ports = port ? [port] : findAdsPowerDebugPorts();
+
+  if (ports.length === 0) {
+    throw new Error(
+      'No running AdsPower browser found.\n' +
+      'Please open a browser profile in AdsPower first, then run this command again.'
+    );
+  }
+
+  const targetPort = ports[0];
+  console.log(`Connecting to AdsPower browser on port ${targetPort}...`);
+
+  try {
+    const browser = await chromium.connectOverCDP(`http://127.0.0.1:${targetPort}`);
+    const contexts = browser.contexts();
+    const context = contexts[0] || await browser.newContext();
+
+    console.log(`Connected to AdsPower browser successfully!`);
+    return { browser, context };
+  } catch (err: any) {
+    throw new Error(`Failed to connect to AdsPower on port ${targetPort}: ${err.message}`);
   }
 }
 
@@ -314,24 +377,73 @@ if (require.main === module) {
     isAdsPowerRunning().then((running) => {
       console.log(`AdsPower: ${running ? 'Running' : 'Not running'}`);
       console.log(`API endpoint: ${ADSPOWER_API}`);
+
+      // Also check for running browsers
+      const ports = findAdsPowerDebugPorts();
+      if (ports.length > 0) {
+        console.log(`\nRunning AdsPower browsers found on ports: ${ports.join(', ')}`);
+        console.log('Use "npx tsx lib/browser.ts connect" to connect to them.');
+      }
+    });
+  } else if (command === 'connect') {
+    // Connect to already-running AdsPower browser (no API needed!)
+    const portArg = args[1];
+    const port = portArg ? parseInt(portArg, 10) : undefined;
+
+    console.log('Looking for running AdsPower browsers...');
+    const ports = findAdsPowerDebugPorts();
+
+    if (ports.length === 0) {
+      console.log('\nNo running AdsPower browser found.');
+      console.log('Please open a browser profile in AdsPower first, then run this command again.');
+      process.exit(1);
+    }
+
+    console.log(`Found browsers on ports: ${ports.join(', ')}\n`);
+
+    connectToRunningAdsPower(port).then(async ({ browser, context }) => {
+      const page = await getPage(context);
+
+      // Check login status
+      const loggedIn = await isLoggedIntoX(page);
+      console.log(`X login status: ${loggedIn ? 'Logged in ✓' : 'Not logged in'}`);
+
+      if (!loggedIn) {
+        console.log('Navigate to x.com in the browser to log in.');
+      }
+
+      console.log('\nConnected! Press Ctrl+C to disconnect.');
+      console.log('The browser will stay open - you can close it in AdsPower.');
+
+      process.on('SIGINT', async () => {
+        console.log('\nDisconnecting from browser...');
+        await browser.close();
+        process.exit(0);
+      });
+    }).catch((err) => {
+      console.error('Error:', err.message);
+      process.exit(1);
     });
   } else {
     console.log(`
 BORD Browser - Browser automation with AdsPower or Playwright
 
 Usage:
-  npx tsx lib/browser.ts launch [profile-id]   Launch browser
+  npx tsx lib/browser.ts connect [port]        Connect to running AdsPower browser (FREE!)
+  npx tsx lib/browser.ts launch [profile]      Launch new browser
   npx tsx lib/browser.ts list                  List profiles
   npx tsx lib/browser.ts delete <profile>      Delete Playwright profile
-  npx tsx lib/browser.ts status                Check AdsPower status
+  npx tsx lib/browser.ts status                Check status & running browsers
+
+Recommended workflow (no API key needed):
+  1. Open a browser profile in AdsPower (just double-click it)
+  2. Run: npx tsx lib/browser.ts connect
+  3. BORD connects to your running browser!
 
 Environment:
   ADSPOWER_API=http://127.0.0.1:50325         AdsPower API endpoint
-  ADSPOWER_API_KEY=xxx                        AdsPower API key (from AdsPower settings)
+  ADSPOWER_API_KEY=xxx                        AdsPower API key (premium only)
   ADSPOWER_PROFILE_ID=xxx                     Default AdsPower profile ID
-
-If AdsPower is running, it will be used automatically.
-Otherwise, falls back to Playwright with stealth settings.
 `);
   }
 }
