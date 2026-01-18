@@ -1,48 +1,111 @@
 #!/usr/bin/env npx tsx
 
 /**
- * BORD Browser - Stealth Playwright wrapper
+ * BORD Browser - Browser automation with AdsPower or Playwright
  *
- * Provides anti-detection browser automation without AdsPower.
- * Uses playwright-extra with stealth plugin.
+ * Supports two modes:
+ * 1. AdsPower (recommended) - Best anti-detection, requires AdsPower installed
+ * 2. Playwright (fallback) - Simple stealth, no extra software needed
  *
  * Usage:
- *   import { launchBrowser, getPage } from '~/bord/lib/browser'
- *   const browser = await launchBrowser('x-reply-guy')
- *   const page = await getPage(browser)
- *   await page.goto('https://x.com')
+ *   # AdsPower mode (default if ADSPOWER_PROFILE_ID is set)
+ *   ADSPOWER_PROFILE_ID=k18yuu5q npx tsx lib/browser.ts launch
+ *
+ *   # Playwright mode (fallback)
+ *   npx tsx lib/browser.ts launch my-profile
  */
 
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
 import { join } from 'path';
 import { homedir } from 'os';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, statSync, rmSync } from 'fs';
 
-const BORD_DIR = join(homedir(), 'bord');
+const BORD_DIR = process.cwd();
 const PROFILES_DIR = join(BORD_DIR, 'data', 'browser-profiles');
+const ADSPOWER_API = process.env.ADSPOWER_API || 'http://127.0.0.1:50325';
 
 // Ensure profiles directory exists
 if (!existsSync(PROFILES_DIR)) {
   mkdirSync(PROFILES_DIR, { recursive: true });
 }
 
+export interface BrowserOptions {
+  headless?: boolean;
+  proxy?: string;
+  adspower?: boolean;
+  adspowerProfileId?: string;
+}
+
 /**
- * Apply stealth techniques to avoid detection
+ * Connect to AdsPower browser profile
+ */
+export async function connectAdsPower(profileId: string): Promise<{ browser: Browser; context: BrowserContext }> {
+  console.log(`Connecting to AdsPower profile: ${profileId}`);
+
+  // Open the profile via AdsPower API
+  const openUrl = `${ADSPOWER_API}/api/v1/browser/start?user_id=${profileId}`;
+  const response = await fetch(openUrl);
+  const data = await response.json();
+
+  if (data.code !== 0) {
+    throw new Error(`AdsPower error: ${data.msg || 'Failed to open profile'}`);
+  }
+
+  const wsEndpoint = data.data.ws.puppeteer;
+  console.log(`Connected to AdsPower WebSocket: ${wsEndpoint}`);
+
+  // Connect Playwright to the AdsPower browser
+  const browser = await chromium.connectOverCDP(wsEndpoint);
+  const contexts = browser.contexts();
+  const context = contexts[0] || await browser.newContext();
+
+  return { browser, context };
+}
+
+/**
+ * Close AdsPower browser profile
+ */
+export async function closeAdsPower(profileId: string): Promise<void> {
+  const closeUrl = `${ADSPOWER_API}/api/v1/browser/stop?user_id=${profileId}`;
+  await fetch(closeUrl);
+}
+
+/**
+ * Check if AdsPower is running
+ */
+export async function isAdsPowerRunning(): Promise<boolean> {
+  try {
+    const response = await fetch(`${ADSPOWER_API}/status`);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * List AdsPower profiles
+ */
+export async function listAdsPowerProfiles(): Promise<any[]> {
+  try {
+    const response = await fetch(`${ADSPOWER_API}/api/v1/user/list?page_size=100`);
+    const data = await response.json();
+    if (data.code === 0) {
+      return data.data.list || [];
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Apply stealth techniques to avoid detection (for Playwright mode)
  */
 async function applyStealthScripts(page: Page): Promise<void> {
-  // Hide webdriver
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'webdriver', { get: () => false });
-  });
-
-  // Hide automation flags
-  await page.addInitScript(() => {
     // @ts-ignore
     window.chrome = { runtime: {} };
-  });
-
-  // Fake plugins
-  await page.addInitScript(() => {
     Object.defineProperty(navigator, 'plugins', {
       get: () => [
         { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
@@ -50,48 +113,40 @@ async function applyStealthScripts(page: Page): Promise<void> {
         { name: 'Native Client', filename: 'internal-nacl-plugin' },
       ],
     });
-  });
-
-  // Fake languages
-  await page.addInitScript(() => {
     Object.defineProperty(navigator, 'languages', {
       get: () => ['en-US', 'en'],
     });
   });
-
-  // Hide headless indicators
-  await page.addInitScript(() => {
-    // Permissions API
-    const originalQuery = window.navigator.permissions.query;
-    // @ts-ignore
-    window.navigator.permissions.query = (parameters: any) =>
-      parameters.name === 'notifications'
-        ? Promise.resolve({ state: Notification.permission } as PermissionStatus)
-        : originalQuery(parameters);
-  });
-}
-
-export interface BrowserOptions {
-  headless?: boolean;
-  proxy?: string;
 }
 
 /**
- * Launch a stealth browser with persistent profile
+ * Launch a browser (AdsPower or Playwright)
  */
 export async function launchBrowser(
   profileName: string = 'default',
   options: BrowserOptions = {}
 ): Promise<BrowserContext> {
+  // Check for AdsPower profile ID
+  const adspowerProfileId = options.adspowerProfileId || process.env.ADSPOWER_PROFILE_ID;
+
+  if (adspowerProfileId || options.adspower) {
+    if (!adspowerProfileId) {
+      throw new Error('ADSPOWER_PROFILE_ID environment variable required for AdsPower mode');
+    }
+    const { context } = await connectAdsPower(adspowerProfileId);
+    return context;
+  }
+
+  // Fallback to Playwright
+  console.log(`Launching Playwright browser with profile: ${profileName}`);
   const profilePath = join(PROFILES_DIR, profileName);
 
-  // Ensure profile directory exists
   if (!existsSync(profilePath)) {
     mkdirSync(profilePath, { recursive: true });
   }
 
-  const launchOptions: any = {
-    headless: options.headless ?? false, // Default to visible
+  const context = await chromium.launchPersistentContext(profilePath, {
+    headless: options.headless ?? false,
     args: [
       '--disable-blink-features=AutomationControlled',
       '--disable-features=IsolateOrigins,site-per-process',
@@ -104,14 +159,8 @@ export async function launchBrowser(
       '--disable-gpu',
       '--window-size=1920,1080',
     ],
-  };
-
-  if (options.proxy) {
-    launchOptions.proxy = { server: options.proxy };
-  }
-
-  // Launch with persistent context (keeps cookies/session)
-  const context = await chromium.launchPersistentContext(profilePath, launchOptions);
+    ...(options.proxy ? { proxy: { server: options.proxy } } : {}),
+  });
 
   return context;
 }
@@ -120,20 +169,10 @@ export async function launchBrowser(
  * Get a new page with stealth scripts applied
  */
 export async function getPage(context: BrowserContext): Promise<Page> {
-  const page = await context.newPage();
+  const pages = context.pages();
+  const page = pages.length > 0 ? pages[0] : await context.newPage();
   await applyStealthScripts(page);
   return page;
-}
-
-/**
- * Get existing page or create new one
- */
-export async function getOrCreatePage(context: BrowserContext): Promise<Page> {
-  const pages = context.pages();
-  if (pages.length > 0) {
-    return pages[0];
-  }
-  return getPage(context);
 }
 
 /**
@@ -142,7 +181,6 @@ export async function getOrCreatePage(context: BrowserContext): Promise<Page> {
 export async function isLoggedIntoX(page: Page): Promise<boolean> {
   try {
     await page.goto('https://x.com/home', { waitUntil: 'domcontentloaded', timeout: 10000 });
-    // If we're redirected to login, we're not logged in
     const url = page.url();
     return !url.includes('login') && !url.includes('i/flow');
   } catch {
@@ -151,24 +189,21 @@ export async function isLoggedIntoX(page: Page): Promise<boolean> {
 }
 
 /**
- * List all browser profiles
+ * List all Playwright profiles
  */
 export function listProfiles(): string[] {
   if (!existsSync(PROFILES_DIR)) return [];
-  const { readdirSync } = require('fs');
   return readdirSync(PROFILES_DIR).filter((f: string) => {
-    const stat = require('fs').statSync(join(PROFILES_DIR, f));
-    return stat.isDirectory();
+    return statSync(join(PROFILES_DIR, f)).isDirectory();
   });
 }
 
 /**
- * Delete a browser profile
+ * Delete a Playwright profile
  */
 export function deleteProfile(profileName: string): void {
   const profilePath = join(PROFILES_DIR, profileName);
   if (existsSync(profilePath)) {
-    const { rmSync } = require('fs');
     rmSync(profilePath, { recursive: true });
   }
 }
@@ -179,23 +214,78 @@ if (require.main === module) {
   const command = args[0];
 
   if (command === 'launch') {
-    const profile = args[1] || 'default';
-    console.log(`Launching BORD Browser with profile: ${profile}`);
-    launchBrowser(profile).then(async (context) => {
-      const page = await getPage(context);
-      await page.goto('https://x.com');
-      console.log('Browser launched! Close the window when done.');
+    const profileOrId = args[1];
+    const adspowerProfileId = process.env.ADSPOWER_PROFILE_ID || profileOrId;
 
-      // Keep process running until browser is closed
-      await new Promise<void>((resolve) => {
-        context.on('close', () => resolve());
-      });
-      console.log('Browser closed.');
-      process.exit(0);
+    // Check if AdsPower is running
+    isAdsPowerRunning().then(async (adsRunning) => {
+      if (adsRunning && adspowerProfileId) {
+        console.log(`Launching AdsPower profile: ${adspowerProfileId}`);
+        try {
+          const { context } = await connectAdsPower(adspowerProfileId);
+          const page = await getPage(context);
+
+          // Check login status
+          const loggedIn = await isLoggedIntoX(page);
+          console.log(`X login status: ${loggedIn ? 'Logged in' : 'Not logged in'}`);
+
+          if (!loggedIn) {
+            console.log('Please log into X in the browser window...');
+            await page.goto('https://x.com/login');
+          }
+
+          console.log('Browser ready! Press Ctrl+C to close.');
+
+          // Keep running
+          process.on('SIGINT', async () => {
+            console.log('\nClosing AdsPower profile...');
+            await closeAdsPower(adspowerProfileId);
+            process.exit(0);
+          });
+        } catch (e: any) {
+          console.error('Error:', e.message);
+          process.exit(1);
+        }
+      } else {
+        // Playwright fallback
+        const profile = profileOrId || 'default';
+        console.log(`Launching Playwright browser with profile: ${profile}`);
+        const context = await launchBrowser(profile);
+        const page = await getPage(context);
+        await page.goto('https://x.com');
+        console.log('Browser launched! Close the window when done.');
+
+        await new Promise<void>((resolve) => {
+          context.on('close', () => resolve());
+        });
+        console.log('Browser closed.');
+        process.exit(0);
+      }
     });
   } else if (command === 'list') {
-    console.log('Browser profiles:');
-    listProfiles().forEach((p) => console.log(`  - ${p}`));
+    console.log('Checking profiles...\n');
+
+    // Check AdsPower
+    isAdsPowerRunning().then(async (running) => {
+      if (running) {
+        console.log('AdsPower profiles:');
+        const profiles = await listAdsPowerProfiles();
+        profiles.forEach((p: any) => {
+          console.log(`  - ${p.name || p.user_id} (ID: ${p.user_id})`);
+        });
+        console.log('');
+      } else {
+        console.log('AdsPower: Not running\n');
+      }
+
+      console.log('Playwright profiles:');
+      const localProfiles = listProfiles();
+      if (localProfiles.length === 0) {
+        console.log('  (none)');
+      } else {
+        localProfiles.forEach((p) => console.log(`  - ${p}`));
+      }
+    });
   } else if (command === 'delete') {
     const profile = args[1];
     if (!profile) {
@@ -203,17 +293,28 @@ if (require.main === module) {
       process.exit(1);
     }
     deleteProfile(profile);
-    console.log(`Deleted profile: ${profile}`);
+    console.log(`Deleted Playwright profile: ${profile}`);
+  } else if (command === 'status') {
+    isAdsPowerRunning().then((running) => {
+      console.log(`AdsPower: ${running ? 'Running' : 'Not running'}`);
+      console.log(`API endpoint: ${ADSPOWER_API}`);
+    });
   } else {
     console.log(`
-BORD Browser - Stealth browser automation
+BORD Browser - Browser automation with AdsPower or Playwright
 
 Usage:
-  npx tsx ~/bord/lib/browser.ts launch [profile]   Launch browser
-  npx tsx ~/bord/lib/browser.ts list               List profiles
-  npx tsx ~/bord/lib/browser.ts delete <profile>   Delete profile
+  npx tsx lib/browser.ts launch [profile-id]   Launch browser
+  npx tsx lib/browser.ts list                  List profiles
+  npx tsx lib/browser.ts delete <profile>      Delete Playwright profile
+  npx tsx lib/browser.ts status                Check AdsPower status
 
-Profiles are stored in: ~/bord/data/browser-profiles/
+Environment:
+  ADSPOWER_API=http://127.0.0.1:50325         AdsPower API endpoint
+  ADSPOWER_PROFILE_ID=xxx                     Default AdsPower profile ID
+
+If AdsPower is running, it will be used automatically.
+Otherwise, falls back to Playwright with stealth settings.
 `);
   }
 }
